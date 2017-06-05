@@ -8,6 +8,7 @@
 #include <sstream>
 #include <ObjParser.hpp>
 #include "lodepng.h"
+#include "bezavCMakeConfig.h"
 #include <stdio.h>
 
 
@@ -61,9 +62,7 @@ int main(int argc, char* argv[])
 {
     ObjParser op("../obj/test.obj");
     int vertCount = op.getVertCount();
-    std::cout << vertCount << '\n';
     int elemCount = op.getElemCount();
-    std::cout << elemCount << '\n';
     float* vertData = new float[vertCount*5];
     unsigned short* elemData = new unsigned short[elemCount*3];
     op.fillVertArray(vertData, true, false);
@@ -99,7 +98,9 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    window = glfwCreateWindow(640, 480, "bezav", NULL, NULL);
+    char windowTitle[64];
+    snprintf(windowTitle, sizeof(windowTitle), "bezav Version %d.%d", BEZAV_VERSION_MAJOR, BEZAV_VERSION_MINOR);
+    window = glfwCreateWindow(640, 480, windowTitle, NULL, NULL);
     if (!window)
     {
         glfwTerminate();
