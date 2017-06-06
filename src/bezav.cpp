@@ -10,17 +10,23 @@
 #include "lodepng.h"
 #include "bezavCMakeConfig.h"
 #include <stdio.h>
+#include <gtk/gtk.h>
 
 
+// Report errors
 static void error_callback(int error, const char* description)
 {
-    fprintf(stderr, "Error: %s\n", description);
+    fprintf(stderr, "Error %d: %s\n", error, description);
 }
+
+// Handle key presses
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
+
+// Called after each shader compile or link step. It prints any errors to std output.
 static void shaderErrorCheck(GLuint component, bool isProgram) {
     GLint success = 0;
     if(isProgram) {
@@ -50,16 +56,19 @@ static void shaderErrorCheck(GLuint component, bool isProgram) {
         std::cout << '\n';
     }
 }
+
+// Report OpenGL errors
 static void errorCheck(const std::string id) {
     GLenum err = GL_NO_ERROR;
     while((err = glGetError()) != GL_NO_ERROR)
     {
         std::cout << id << ' ' << err << '\n';
-      //printf("%s 0x%x", id.c_str(), err);
     }
 }
+
 int main(int argc, char* argv[])
 {
+    // Import test object
     ObjParser op("../obj/test.obj");
     int vertCount = op.getVertCount();
     int elemCount = op.getElemCount();
@@ -68,12 +77,14 @@ int main(int argc, char* argv[])
     op.fillVertArray(vertData, true, false);
     op.fillElementArray(elemData);
 
+    // Import test texture
     unsigned char* texData;
     unsigned texWidth;
     unsigned texHeight;
     const char* texFilename = "../img/catSing.png";
     lodepng_decode32_file(&texData, &texWidth, &texHeight, texFilename);
 
+    // Import shader programs
     std::ifstream vfs("../src/shaders/vert.vert");
     std::ifstream ffs("../src/shaders/frag.frag");
     const char* vertex_shader_text;
@@ -88,8 +99,10 @@ int main(int argc, char* argv[])
 
 
 
+    // Create and configure window and OpenGL context
     GLFWwindow* window;
-    GLuint vertex_buffer, vertex_array, element_buffer, textureID, vertex_shader, fragment_shader, program;
+    GLuint vertex_buffer, vertex_array, element_buffer, textureID;
+    GLuint vertex_shader, fragment_shader, shader_program;
     GLint mvp_location, vpos_location, uv_location, sampler_location;
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
@@ -99,7 +112,11 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     char windowTitle[64];
-    snprintf(windowTitle, sizeof(windowTitle), "bezav Version %d.%d", BEZAV_VERSION_MAJOR, BEZAV_VERSION_MINOR);
+    snprintf(windowTitle, 
+		    sizeof(windowTitle), 
+		    "bezav Version %d.%d", 
+		    BEZAV_VERSION_MAJOR, 
+		    BEZAV_VERSION_MINOR);
     window = glfwCreateWindow(640, 480, windowTitle, NULL, NULL);
     if (!window)
     {
@@ -110,10 +127,9 @@ int main(int argc, char* argv[])
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
     glfwSwapInterval(1);
-    // NOTE: OpenGL error checks have been omitted for brevity
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    errorCheck("Depth");
+    errorCheck("Depth test config");
 
     glGenVertexArrays(1, &vertex_array);
     glBindVertexArray(vertex_array);
@@ -145,25 +161,25 @@ int main(int argc, char* argv[])
     glShaderSource(vertex_shader, 1, &vertex_shader_text, NULL);
     glCompileShader(vertex_shader);
     shaderErrorCheck(vertex_shader, false);
-    errorCheck("vert shader");
+    errorCheck("vertex shader");
 
     fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment_shader, 1, &fragment_shader_text, NULL);
     glCompileShader(fragment_shader);
     shaderErrorCheck(fragment_shader, false);
-    errorCheck("frag shader");
+    errorCheck("fragment shader");
 
-    program = glCreateProgram();
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragment_shader);
-    glLinkProgram(program);
-    shaderErrorCheck(program, true);
+    shader_program = glCreateProgram();
+    glAttachShader(shader_program, vertex_shader);
+    glAttachShader(shader_program, fragment_shader);
+    glLinkProgram(shader_program);
+    shaderErrorCheck(shader_program, true);
     errorCheck("shader program link");
 
-    mvp_location = glGetUniformLocation(program, "MVP");
-    sampler_location = glGetUniformLocation(program, "myTextureSampler");
-    vpos_location = glGetAttribLocation(program, "vPos");
-    uv_location = glGetAttribLocation(program, "vertexUV");
+    mvp_location = glGetUniformLocation(shader_program, "MVP");
+    sampler_location = glGetUniformLocation(shader_program, "myTextureSampler");
+    vpos_location = glGetAttribLocation(shader_program, "vPos");
+    uv_location = glGetAttribLocation(shader_program, "vertexUV");
     errorCheck("shader variable gets");
 
     glEnableVertexAttribArray(vpos_location);
@@ -184,7 +200,7 @@ int main(int argc, char* argv[])
         float ratio;
         int width, height;
         mat4x4 m, p, mvp;
-        glfwGetFramebufferSize(window, &width, &height);
+        glfwGetFramebufferSize(window, &width, &height); // TODO: take this out of the main loop
         ratio = width / (float) height;
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -193,7 +209,7 @@ int main(int argc, char* argv[])
         mat4x4_translate(m, -1, 0, 0);
         mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
         mat4x4_mul(mvp, p, m);
-        glUseProgram(program);
+        glUseProgram(shader_program);
         glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*) mvp);
         glDrawElements(GL_TRIANGLES, elemCount, GL_UNSIGNED_SHORT, (void*)0 );
         glfwSwapBuffers(window);
@@ -201,5 +217,7 @@ int main(int argc, char* argv[])
     }
     glfwDestroyWindow(window);
     glfwTerminate();
+    delete [] vertData;
+    delete [] elemData;
     exit(EXIT_SUCCESS);
 }
